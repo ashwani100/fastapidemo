@@ -1,0 +1,122 @@
+main.py
+from fastapi import FastAPI
+from search_api import app as search_app
+from bookmark_api import app as bookmark_app
+
+app = FastAPI()
+app.mount("/searchapi", search_app)
+app.mount("/bookmarkapi", bookmark_app)
+===================================================================
+search_api.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import boto3
+from boto3.dynamodb.conditions import Key
+
+app = FastAPI()
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+table_name = 'UserSearchHistory'
+
+def create_table_if_not_exists():
+    existing_tables = dynamodb.meta.client.list_tables()['TableNames']
+    if table_name not in existing_tables:
+        dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[
+                {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'last_search_date', 'KeyType': 'RANGE'}
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                {'AttributeName': 'last_search_date', 'AttributeType': 'S'}
+            ],
+            BillingMode='PAY_PER_REQUEST'
+        )
+        print("Waiting for table to be created...")
+        dynamodb.Table(table_name).wait_until_exists()
+
+create_table_if_not_exists()
+table = dynamodb.Table(table_name)
+
+class SearchEntry(BaseModel):
+    user_id: str
+    site_id: str
+    site_name: str
+    last_search_date: str  # ISO 8601 format
+
+@app.post("/search")
+def add_search_entry(entry: SearchEntry):
+    try:
+        table.put_item(Item=entry.dict())
+        return {"message": "Search entry added successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/search/{user_id}")
+def get_user_searches(user_id: str):
+    try:
+        response = table.query(
+            KeyConditionExpression=Key('user_id').eq(user_id),
+            ScanIndexForward=False
+        )
+        return response['Items']
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+================================================================
+bookmark_api.py
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import boto3
+from boto3.dynamodb.conditions import Key
+
+app = FastAPI()
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+table_name = 'UserBookmarkHistory'
+
+def create_table_if_not_exists():
+    existing_tables = dynamodb.meta.client.list_tables()['TableNames']
+    if table_name not in existing_tables:
+        dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[
+                {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'last_search_date', 'KeyType': 'RANGE'}
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                {'AttributeName': 'last_search_date', 'AttributeType': 'S'}
+            ],
+            BillingMode='PAY_PER_REQUEST'
+        )
+        print("Waiting for bookmark table to be created...")
+        dynamodb.Table(table_name).wait_until_exists()
+
+create_table_if_not_exists()
+table = dynamodb.Table(table_name)
+
+class BookmarkEntry(BaseModel):
+    user_id: str
+    site_id: str
+    question_id: str
+    is_bookmark: bool
+    last_search_date: str  # ISO 8601 format
+
+@app.post("/bookmark")
+def add_bookmark(entry: BookmarkEntry):
+    try:
+        table.put_item(Item=entry.dict())
+        return {"message": "Bookmark entry added successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/bookmark/{user_id}")
+def get_user_bookmarks(user_id: str):
+    try:
+        response = table.query(
+            KeyConditionExpression=Key('user_id').eq(user_id),
+            ScanIndexForward=False
+        )
+        return response['Items']
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
