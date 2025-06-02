@@ -1,0 +1,21 @@
+curl -X POST "http://localhost:8000/bookmark/save" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user123",
+    "site_id": "site456",
+    "site_name": "OpenAI",
+    "is_bookmark": true,
+    "is_pin": false,
+    "last_search_date": "2024-06-03T12:00:00"
+}'
+
+curl -X POST "http://localhost:8000/conversation/save" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user123",
+    "site_id": "site456",
+    "question_text": "What is AI?",
+    "answer_text": "Artificial Intelligence",
+    "is_thumsup": true,
+    "last_search_date": "2024-06-03T12:00:00"
+}'
